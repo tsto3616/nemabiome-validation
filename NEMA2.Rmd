@@ -1,0 +1,152 @@
+# NEMA2:
+
+library(dada2); packageVersion("dada2")
+library(DECIPHER)
+packageVersion("DECIPHER")
+library(ShortRead)
+packageVersion("ShortRead") 
+library(Biostrings)
+packageVersion("Biostrings")
+library(ggplot2)
+packageVersion("ggplot2")
+library(stringr) # not strictly required but handy
+packageVersion("stringr")
+library(readr)
+packageVersion("readr")
+set.seed(106)
+
+path <- "/Users/Thomas/Desktop/Nematobiome/NEMA2"
+
+fwd_files <- sort(list.files(path, pattern = "R1", full.names = TRUE)) 
+rev_files <- sort(list.files(path, pattern = "R2", full.names = TRUE))
+
+
+# It's also handy to have a vector of sample names, which in this case is everything up 
+# until the first underscore, which is what our regular expression caputres.  You may
+# also create this manually if you don't have too many samples
+samples = str_extract(basename(fwd_files), "^[^_]+")
+
+
+names(fwd_files) <- samples
+names(rev_files) <- samples
+
+# NEMA2 Primers
+#fwd_primer <- "ACGTCTGGTTCAGGGTTG"
+rev_primer <- "ATGCTTAAGTTCAGCGGGTA"
+fwd_primer_rev <- as.character(reverseComplement(DNAStringSet(fwd_primer)))
+rev_primer_rev <- as.character(reverseComplement(DNAStringSet(rev_primer)))
+
+# This function counts number of reads in which the primer is found
+count_primers <- function(primer, filename) {
+  num_hits <- vcountPattern(primer, sread(readFastq(filename)), fixed = FALSE)
+  return(sum(num_hits > 0))}
+
+count_primers(fwd_primer, fwd_files[[1]])
+count_primers(rev_primer, rev_files[[1]])
+
+cutadapt <- path.expand("/Users/Thomas/opt/anaconda3/bin/cutadapt")
+
+# Make sure it works
+system2(cutadapt, args = "--version") 
+
+# Create an output directory to store the clipped files
+cut_dir <- file.path(path, "cutadapt")
+if (!dir.exists(cut_dir)) dir.create(cut_dir)
+
+fwd_cut <- file.path(cut_dir, basename(fwd_files))
+rev_cut <- file.path(cut_dir, basename(rev_files))
+
+names(fwd_cut) <- samples
+names(rev_cut) <- samples
+
+# It's good practice to keep some log files so let's create some
+# file names that we can use for those 
+cut_logs <- path.expand(file.path(cut_dir, paste0(samples, ".log")))
+
+cutadapt_args <- c("-g", fwd_primer, "-a", rev_primer_rev, 
+                   "-G", rev_primer, "-A", fwd_primer_rev,
+                   "-n", 2, "--discard-untrimmed")
+
+# Loop over the list of files, running cutadapt on each file.  If you don't have a vector of sample names or 
+# don't want to keep the log files you can set stdout = "" to output to the console or stdout = NULL to discard
+for (i in seq_along(fwd_files)) {
+  system2(cutadapt, 
+          args = c(cutadapt_args,
+                   "-o", fwd_cut[i], "-p", rev_cut[i], 
+                   fwd_files[i], rev_files[i]),
+          stdout = cut_logs[i])}
+
+# quick check that we got something
+head(list.files(cut_dir))          
+
+plotQualityProfile(fwd_cut[1:2]) + ggtitle("Forward")
+
+plotQualityProfile(rev_cut[1:2]) + ggtitle("Reverse")
+
+# Same as for the clippling we create an output directory to store the filtered files
+filt_dir <- file.path(path, "filtered")
+if (!dir.exists(filt_dir)) dir.create(filt_dir)
+
+fwd_filt <- file.path(filt_dir, basename(fwd_files))
+rev_filt <- file.path(filt_dir, basename(rev_files))
+
+names(fwd_filt) <- samples
+names(rev_filt) <- samples
+
+filtered_out <- filterAndTrim(
+  fwd = fwd_cut, 
+  filt = fwd_filt,
+  rev = rev_cut,
+  filt.rev = rev_filt,
+  maxEE = c(2, 5), 
+  truncQ = 2, 
+  rm.phix = TRUE, 
+  compress = TRUE, 
+  multithread = TRUE, truncLen=c(200,200), maxN=0
+  )  
+
+head(filtered_out)  
+
+err_fwd <- learnErrors(fwd_filt, multithread = TRUE)
+err_rev <- learnErrors(rev_filt, multithread = TRUE)
+
+plotErrors(err_fwd, nominalQ = TRUE)
+
+dada_fwd <- dada(fwd_filt, err = err_fwd, multithread = TRUE)
+dada_rev <- dada(rev_filt, err = err_rev, multithread = TRUE)
+
+mergers <- mergePairs(
+  dadaF = dada_fwd,
+  dadaR = dada_rev,
+  derepF = fwd_filt,
+  derepR = rev_filt,
+  maxMismatch = 1, 
+  verbose=TRUE)
+
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab) 
+
+seqtab_nochim <- removeBimeraDenovo(seqtab, method = "consensus", multithread = TRUE, verbose = TRUE)
+dim(seqtab_nochim)
+
+table(nchar(getSequences(seqtab_nochim)))
+
+# small function to get the number of sequences
+getN <- function(x) sum(getUniques(x))
+
+track <- cbind(
+  filtered_out, 
+  sapply(dada_fwd, getN), 
+  sapply(dada_rev, getN), 
+  sapply(mergers, getN), 
+  rowSums(seqtab_nochim))
+
+colnames(track) <- c("raw", "filtered", "denoised_fwd", "denoised_rev", "merged", "no_chim")
+rownames(track) <- samples  
+head(track)
+
+write.csv(seqtab_nochim, file = "NEMA2.csv")  
+
+Taxa <- assignTaxonomy(seqtab_nochim,"/Users/Thomas/Downloads/Nema_ref_ver3_at.fas",taxLevels = c("Locus", "Genus", "Species", "Subsp/Strain"), verbose = TRUE, minBoot = 55)
+
+
