@@ -1,0 +1,36 @@
+library(readxl)
+
+# stacked plot for abundance of pooling, note averaged the replicates (rounded down to 1) from NEMA1, cow13. Then compared it to the pooling for NEMA1, cow 13:
+nema<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/Pooling.xlsx", sheet="Stacked")
+str(nema)
+head(nema)
+
+df<- data.frame(nema)
+df
+
+library(ggplot2)
+
+ggplot(nema, aes(fill=Nematode, y=Abundance, x=Pooled)) + 
+    geom_bar(position="stack", stat="identity")
+# massive discrepancy in 2_3 pooling in abundance of reads overall
+
+# Stacked + percent
+ggplot(nema, aes(fill=Nematode, y=Abundance, x=Pooled)) + 
+    geom_bar(position="fill", stat="identity") 
+# No pooling greatly reduces the diversity of abundance of reads for OR5,6,7,8. Pooling seems to produce highly replicatable results regardless of the level of pooling etc. 
+
+# now to do a similar thing (same averaging of replicates) for the Bray curtis estimate. We added the counts of each pooling and the averages of each replicate (rounded down to 1). Since there is no difference in pirmers used we ignore primers and use both primers in the count. First row is replicates, second is 1_2_3, 3rd is 1_2, 4th is 2_3, 5th is 1_3. 
+
+nema2<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/Pooling.xlsx", sheet="Bray-pooling")
+str(nema2)
+head(nema2)
+
+df<- data.frame(nema2)
+df
+
+library(vegan)  
+
+vegdist(df, method="bray")  
+# largest dissimilarity between replicates and pooling is 0.03... therefor very low dissimilarity (3%)  
+  
+  

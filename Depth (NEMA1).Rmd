@@ -1,0 +1,18 @@
+#### species done based on NEMA1, tallied for each nematode species and arranged according to depth of sequencing, now to do barplots 
+
+library(readxl)
+
+nema<-read_excel("/Users/Thomas/Desktop/Nematobiome/excel/ASVs (NEMA1).xlsx", sheet="Stacked (Species)")
+str(nema)
+head(nema)
+
+library(ggplot2)
+
+nema$Depth<-as.factor(nema$Depth)
+
+# Stacked + percent
+ggplot(nema, aes(fill=Nematode, y=Abundance, x=Depth)) + 
+    geom_bar(position="fill", stat="identity") 
+
+    
+    

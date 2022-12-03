@@ -1,0 +1,71 @@
+library(readxl)
+
+# We treat our replicates are real replicates and not pseudoreplicates- this is because the experimental unit is the PCR reaction as the primer is the treatment. 
+nema<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/NEMA1_and_2.xlsx", sheet="Stacked")
+str(nema)
+head(nema)
+
+library(ggplot2)
+library(tidyverse)
+
+# just a plain old stacked barplot, next we do a % based barplot! Note this was calculated by doing a total of abundance for each species and primer combination. 
+ggplot(nema, aes(fill=Nematode, y=Abundance, x=Primer)) + 
+    geom_bar(position="stack", stat="identity")
+  
+# Stacked + percent
+ggplot(nema, aes(fill=Nematode, y=Abundance, x=Primer)) + 
+    geom_bar(position="fill", stat="identity") 
+    
+# now we do our Bray Curtis analysis with Primer as 'sites'. Note deleted the primer names because it was confusing R
+nema2<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/NEMA1_and_2.xlsx", sheet="Bray_primer")
+str(nema2)
+head(nema2)
+
+df<- data.frame(nema2)
+df
+
+library(vegan)
+
+vegdist(df, method="bray")
+# 0 means all species are the same... we have 0.03! Therefor our primers give a very similar response... should be 3%
+
+###### now we map out the replicates! This is done on NEMA1 with cow 13
+nema3<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/NEMA1_and_2.xlsx", sheet="Stacked 2")
+str(nema3)
+head(nema3)
+
+df<- data.frame(nema3)
+df
+
+# just a plain old stacked barplot, next we do a % based barplot! Note this was calculated by doing a total of abundance for each species and primer combination. 
+ggplot(nema3, aes(fill=Nematode, y=Abundance, x=Replicate)) + 
+    geom_bar(position="stack", stat="identity")
+# Some variation but not much!
+
+# Stacked + percent
+ggplot(nema3, aes(fill=Nematode, y=Abundance, x=Replicate)) + 
+    geom_bar(position="fill", stat="identity") 
+# looks the exact same     
+
+# now Bray Curtis with replicates as 'sites'. Had to remove replicates because its confusing R. These are the replicates of NEMA1, cow13. the 4th column/ row is the avergae of all 3!
+nema4<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/NEMA1_and_2.xlsx", sheet="Bray_replicates")
+str(nema4)
+head(nema4)
+
+df<- data.frame(nema4)
+df
+
+vegdist(df, method="bray")
+# our most dissimilar result is replicate 2 v 3 at 0.0619! This shows us that the replicates are highly similar, but above the 5% goal of most statistical tests 
+
+# this is BC for the need for 2 positive replicates to be included in the analysis. 
+nema4<-read_excel("/Users/Thomas/Desktop/Nemabiome/excel/NEMA1_and_2.xlsx", sheet="Bray 3")
+str(nema4)
+head(nema4)
+
+df<- data.frame(nema4)
+df
+
+vegdist(df, method="bray")
+
+
